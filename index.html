@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scanner de Billets QR Code</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: #1a1a1a;
+            overflow: hidden;
+        }
+
+        #scanner-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #canvas {
+            display: none;
+        }
+
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+        }
+
+        .scan-region {
+            width: 280px;
+            height: 280px;
+            border: 3px solid #fff;
+            border-radius: 20px;
+            position: relative;
+            box-shadow: 0 0 0 99999px rgba(0, 0, 0, 0.5);
+        }
+
+        .corner {
+            position: absolute;
+            width: 35px;
+            height: 35px;
+            border: 5px solid #00ff00;
+        }
+
+        .corner.top-left {
+            top: -5px;
+            left: -5px;
+            border-right: none;
+            border-bottom: none;
+            border-radius: 20px 0 0 0;
+        }
+
+        .corner.top-right {
+            top: -5px;
+            right: -5px;
+            border-left: none;
+            border-bottom: none;
+            border-radius: 0 20px 0 0;
+        }
+
+        .corner.bottom-left {
+            bottom: -5px;
+            left: -5px;
+            border-right: none;
+            border-top: none;
+            border-radius: 0 0 0 20px;
+        }
+
+        .corner.bottom-right {
+            bottom: -5px;
+            right: -5px;
+            border-left: none;
+            border-top: none;
+            border-radius: 0 0 20px 0;
+        }
+
+        .scan-line {
+            position: absolute;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #00ff00, transparent);
+            animation: scan 2s infinite;
+        }
+
+        @keyframes scan {
+            0%, 100% { top: 0; }
+            50% { top: 100%; }
+        }
+
+        .instruction {
+            margin-top: 30px;
+            color: white;
+            font-size: 18px;
+            text-align: center;
+            padding: 0 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+
+        /* Écran de résultat */
+        .result-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 1000;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .result-screen.show {
+            display: flex;
+        }
+
+        .result-screen.success {
+            background: #00c853;
+        }
+
+        .result-screen.error {
+            background: #d32f2f;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Animation Check */
+        .checkmark {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: block;
+            stroke-width: 4;
+            stroke: #fff;
+            stroke-miterlimit: 10;
+            box-shadow: inset 0px 0px 0px #00c853;
+            animation: fill 0.4s ease-in-out 0.4s forwards, scale 0.3s ease-in-out 0.9s both;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .checkmark__circle {
+            stroke-dasharray: 166;
+            stroke-dashoffset: 166;
+            stroke-width: 4;
+            stroke-miterlimit: 10;
+            stroke: #fff;
+            fill: none;
+            animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+        }
+
+        .checkmark__check {
+            transform-origin: 50% 50%;
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+        }
+
+        @keyframes stroke {
+            100% { stroke-dashoffset: 0; }
+        }
+
+        @keyframes scale {
+            0%, 100% { transform: none; }
+            50% { transform: scale3d(1.1, 1.1, 1); }
+        }
+
+        @keyframes fill {
+            100% { box-shadow: inset 0px 0px 0px 60px #fff; }
+        }
+
+        /* Animation Croix */
+        .crossmark {
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            display: block;
+            stroke-width: 4;
+            stroke: #fff;
+            stroke-miterlimit: 10;
+            box-shadow: inset 0px 0px 0px #d32f2f;
+            animation: fill-cross 0.4s ease-in-out 0.4s forwards, scale 0.3s ease-in-out 0.9s both;
+            position: relative;
+            margin: 0 auto;
+        }
+
+        .crossmark__circle {
+            stroke-dasharray: 166;
+            stroke-dashoffset: 166;
+            stroke-width: 4;
+            stroke-miterlimit: 10;
+            stroke: #fff;
+            fill: none;
+            animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+        }
+
+        .crossmark__cross {
+            transform-origin: 50% 50%;
+            stroke-dasharray: 48;
+            stroke-dashoffset: 48;
+            animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+        }
+
+        @keyframes fill-cross {
+            100% { box-shadow: inset 0px 0px 0px 60px #fff; }
+        }
+
+        .result-text {
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            margin-top: 30px;
+            text-align: center;
+            padding: 0 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .billet-info {
+            color: white;
+            font-size: 20px;
+            margin-top: 25px;
+            text-align: center;
+            padding: 0 30px;
+            max-width: 90%;
+        }
+
+        .billet-info .info-item {
+            margin: 10px 0;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.25);
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .billet-info .info-nom {
+            font-size: 26px;
+            font-weight: bold;
+            background: rgba(255, 255, 255, 0.35);
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+
+        #error-message {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(211, 47, 47, 0.95);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            display: none;
+            z-index: 100;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .stats {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 25px;
+            border-radius: 10px;
+            font-size: 16px;
+            z-index: 50;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="scanner-container">
+        <video id="video" playsinline></video>
+        <canvas id="canvas"></canvas>
+        
+        <div class="overlay">
+            <div class="scan-region">
+                <div class="corner top-left"></div>
+                <div class="corner top-right"></div>
+                <div class="corner bottom-left"></div>
+                <div class="corner bottom-right"></div>
+                <div class="scan-line"></div>
+            </div>
+            <div class="instruction">
+                📱 Placez le QR code dans la zone de scan
+            </div>
+        </div>
+
+        <div class="stats" id="stats">Chargement...</div>
+        <div id="error-message"></div>
+    </div>
+
+    <!-- Écran de succès -->
+    <div id="success-screen" class="result-screen success">
+        <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+            <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+            <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+        </svg>
+        <div class="result-text">✓ Billet Valide</div>
+        <div class="billet-info" id="billet-info"></div>
+    </div>
+
+    <!-- Écran d'erreur -->
+    <div id="error-screen" class="result-screen error">
+        <svg class="crossmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+            <circle class="crossmark__circle" cx="26" cy="26" r="25" fill="none"/>
+            <path class="crossmark__cross" fill="none" d="M16 16 l20 20 M36 16 l-20 20"/>
+        </svg>
+        <div class="result-text">✗ Billet Non Valide</div>
+        <div class="billet-info" style="font-size: 18px;">
+            Ce billet n'existe pas dans la base de données
+        </div>
+    </div>
+
+    <!-- Bibliothèque jsQR pour scanner les QR codes -->
+    <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const successScreen = document.getElementById('success-screen');
+        const errorScreen = document.getElementById('error-screen');
+        const errorMessage = document.getElementById('error-message');
+        const billetInfo = document.getElementById('billet-info');
+        const stats = document.getElementById('stats');
+        
+        let billetsData = [];
+        let scanning = true;
+        let lastScannedCode = '';
+        let lastScanTime = 0;
+
+        // Charger la liste des billets
+        async function loadBillets() {
+            try {
+                console.log('Tentative de chargement de billets.json...');
+                const response = await fetch('billets.json');
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                billetsData = await response.json();
+                
+                console.log(`✓ ${billetsData.length} billets chargés avec succès`, billetsData);
+                stats.textContent = `✓ ${billetsData.length} billets chargés`;
+                stats.style.background = 'rgba(0, 200, 83, 0.8)';
+                
+            } catch (error) {
+                console.error('Erreur de chargement:', error);
+                showError('⚠️ Erreur: Impossible de charger billets.json');
+                stats.textContent = '✗ Erreur de chargement';
+                stats.style.background = 'rgba(211, 47, 47, 0.8)';
+            }
+        }
+
+        // Démarrer la caméra
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+                video.srcObject = stream;
+                video.setAttribute('playsinline', true);
+                video.play();
+                requestAnimationFrame(tick);
+                console.log('✓ Caméra démarrée');
+            } catch (error) {
+                showError('⚠️ Erreur: Impossible d\'accéder à la caméra');
+                console.error('Erreur caméra:', error);
+            }
+        }
+
+        // Scanner en continu
+        function tick() {
+            if (video.readyState === video.HAVE_ENOUGH_DATA && scanning) {
+                canvas.height = video.videoHeight;
+                canvas.width = video.videoWidth;
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const code = jsQR(imageData.data, imageData.width, imageData.height, {
+                    inversionAttempts: "dontInvert",
+                });
+
+                if (code) {
+                    const now = Date.now();
+                    // Éviter de scanner le même code plusieurs fois rapidement
+                    if (code.data !== lastScannedCode || now - lastScanTime > 3500) {
+                        lastScannedCode = code.data;
+                        lastScanTime = now;
+                        handleQRCode(code.data);
+                    }
+                }
+            }
+            requestAnimationFrame(tick);
+        }
+
+        // Traiter le QR code scanné
+        function handleQRCode(qrData) {
+            scanning = false;
+            console.log('QR Code scanné:', qrData);
+
+            // Chercher le billet dans la liste
+            const billetTrouve = billetsData.find(b => b.billet === qrData);
+
+            if (billetTrouve) {
+                console.log('✓ Billet trouvé:', billetTrouve);
+                showSuccess(billetTrouve);
+            } else {
+                console.log('✗ Billet non trouvé');
+                showErrorScreen();
+            }
+        }
+
+        // Afficher le succès
+        function showSuccess(billet) {
+            vibrate([200, 100, 200]);
+            
+            let info = '';
+            info += `<div class="info-nom">${billet.prenom} ${billet.nom}</div>`;
+            info += `<div class="info-item">🎫 Billet: ${billet.billet}</div>`;
+            info += `<div class="info-item">📍 Rangée ${billet.rangee} - Place ${billet.place}</div>`;
+            
+            billetInfo.innerHTML = info;
+            successScreen.classList.add('show');
+
+            setTimeout(() => {
+                successScreen.classList.remove('show');
+                scanning = true;
+                lastScannedCode = ''; // Réinitialiser pour permettre un nouveau scan
+            }, 4000);
+        }
+
+        // Afficher l'erreur
+        function showErrorScreen() {
+            vibrate([100, 50, 100, 50, 100]);
+            
+            errorScreen.classList.add('show');
+
+            setTimeout(() => {
+                errorScreen.classList.remove('show');
+                scanning = true;
+                lastScannedCode = ''; // Réinitialiser pour permettre un nouveau scan
+            }, 3000);
+        }
+
+        // Vibration
+        function vibrate(pattern) {
+            if ('vibrate' in navigator) {
+                navigator.vibrate(pattern);
+            }
+        }
+
+        // Afficher un message d'erreur
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+            setTimeout(() => {
+                errorMessage.style.display = 'none';
+            }, 5000);
+        }
+
+        // Initialisation
+        async function init() {
+            await loadBillets();
+            await startCamera();
+        }
+
+        init();
+    </script>
+</body>
+</html>
